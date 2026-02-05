@@ -1,0 +1,39 @@
+# --- 核心二进制文件与模型 ---
+/bin/
+/models/
+*.exe
+*.dll
+*.so
+*.dylib
+*.gguf
+
+# --- Go 相关 ---
+go.work
+vendor/
+# 忽略编译后的项目主程序
+OctoStudio
+OctoStudio.exe
+
+# --- 前端相关 (Web) ---
+web/node_modules/
+web/dist/
+.eslintcache
+.stylelintcache
+
+# --- 配置文件与秘钥 (核心安全) ---
+.env
+.env.local
+config/config.local.yaml
+# 如果你打算把 API Key 放进特定的 json/yaml
+/config/secrets.*
+
+# --- 操作系统与 IDE ---
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.log
+
+# --- 测试与覆盖率 ---
+cover.out
+coverage.txt

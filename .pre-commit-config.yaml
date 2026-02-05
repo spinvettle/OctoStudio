@@ -1,0 +1,32 @@
+exclude: '^bin/|^models/'
+repos:
+  # --- 通用检查 ---
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace      # 去掉行尾空格
+      - id: end-of-file-fixer        # 确保文件以换行符结尾
+      - id: check-yaml               # 检查 YAML 语法（特别是你的 config/*.yaml）
+      - id: check-added-large-files  # 防止误传超大文件（比如误传了 .gguf 模型）
+        args: ['--maxkb=5120']       # 超过 5MB 报错
+
+  # --- Go 语言检查 ---
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt        # 运行 gofmt 格式化
+      - id: go-imports    # 自动整理 import 顺序
+      - id: go-unit-tests # 自动运行单元测试（可选，若测试慢可移除）
+
+  # --- 更强大的 Go 检查 ---
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.8.0
+    hooks:
+      - id: golangci-lint
+
+  # --- 前端检查 (如果 web 目录下有前端代码) ---
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        files: \.(js|ts|vue|css|scss|md)$
