@@ -1,0 +1,10 @@
+
+
+server:
+  name: "Go-gateway"
+  mode: "debug"
+  port: 8080
+logging:
+  level: "debug"  # stdout, file, both
+  output: "file"
+  filedir: "./logs"
