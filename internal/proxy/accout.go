@@ -1,0 +1,39 @@
+package proxy
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type Account struct {
+	ID             string
+	Name           string
+	Provider       string
+	AccessToken    string
+	AccessTokenExp int
+	AccessTokenIat int
+	RefreshToken   string
+	Status         string
+	UsagePercent   float32
+	Priority       int
+
+	LastCheck time.Time
+	// mu        sync.Mutex
+}
+
+type AccountPool struct {
+	AccountsMap map[string]map[string]*Account
+	// mu          sync.RWMutex
+}
+
+func (pool *AccountPool) GetAccount() Account {
+	// pool.mu.RLock()
+	// pool.mu.Unlock()
+	return Account{
+		ID:          uuid.NewString(),
+		Name:        "test-account",
+		Provider:    "Codex",
+		AccessToken: "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE5MzQ0ZTY1LWJiYzktNDRkMS1hOWQwLWY5NTdiMDc5YmQwZSIsInR5cCI6IkpXVCJ9.eyJhdWQiOlsiaHR0cHM6Ly9hcGkub3BlbmFpLmNvbS92MSJdLCJjbGllbnRfaWQiOiJhcHBfRU1vYW1FRVo3M2YwQ2tYYVhwN2hyYW5uIiwiZXhwIjoxNzc1NjI0NTU4LCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZjFjZGM5NWEtM2U0My00YjA2LTk3MjItMTVlNzQ5MmQ1YjM1IiwiY2hhdGdwdF9hY2NvdW50X3VzZXJfaWQiOiJ1c2VyLW4wejI1a05QZkk4VzNlRW1IV0NONDZlbl9fZjFjZGM5NWEtM2U0My00YjA2LTk3MjItMTVlNzQ5MmQ1YjM1IiwiY2hhdGdwdF9jb21wdXRlX3Jlc2lkZW5jeSI6Im5vX2NvbnN0cmFpbnQiLCJjaGF0Z3B0X3BsYW5fdHlwZSI6ImZyZWUiLCJjaGF0Z3B0X3VzZXJfaWQiOiJ1c2VyLW4wejI1a05QZkk4VzNlRW1IV0NONDZlbiIsImxvY2FsaG9zdCI6dHJ1ZSwidXNlcl9pZCI6InVzZXItbjB6MjVrTlBmSThXM2VFbUhXQ040NmVuIn0sImh0dHBzOi8vYXBpLm9wZW5haS5jb20vcHJvZmlsZSI6eyJlbWFpbCI6ImxpdXpob3U2MTBAb3V0bG9vay5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZX0sImlhdCI6MTc3NDc2MDU1OCwiaXNzIjoiaHR0cHM6Ly9hdXRoLm9wZW5haS5jb20iLCJqdGkiOiIxMzg3NGQwZC1kMGM3LTRhNmQtYTgwZi00MTFhNjljM2FlMDkiLCJuYmYiOjE3NzQ3NjA1NTgsInB3ZF9hdXRoX3RpbWUiOjE3NzQ3NjA1NTYwMzAsInNjcCI6WyJvcGVuaWQiLCJwcm9maWxlIiwiZW1haWwiLCJvZmZsaW5lX2FjY2VzcyIsImFwaS5jb25uZWN0b3JzLnJlYWQiLCJhcGkuY29ubmVjdG9ycy5pbnZva2UiXSwic2Vzc2lvbl9pZCI6ImF1dGhzZXNzX1pocEsyTHQ1YWltY3R2Mk5QY1pLSHNEVyIsInNsIjp0cnVlLCJzdWIiOiJhdXRoMHxsaXNaZWtkalZMSDhZSWxKakROOHd0cGsifQ.Y3gpRf3-qmLtKO7rf4C67kXjcLR0MSpbtE6wfW9iNYUMHpOjxlZdf0-S-IfAHT6sj9b5DoMydWHBsW156U9Vayrb0BiGAaRpDttKUCZqQebkDsUdqtjPb_F70l6r7KRmfiQJCPDsoI8jiA-Y0bTz5hHemxw23F4F0s2OK_V2UjUon7UxUs3zrCX1UAkjdSykeNb77bG9euuRsFS2RyGXe-Vj1NBj1WEyWw6xM189rw0OMXO6p_LRmxe0XY0rUH_7owH0ogGWRu_rJTvR8a7jvi5YKYLcj944uasS7qlYQTDodMMgiHCs4Q3MAILdNNWBpQkRI5RzbtmkYJ5HnXE9lnBCUQEOun7ShZ9ElC3WFDlkOyC9QcDXsnFrNDbtLWbLWa-jdjEGrfoiGdvgJcu4v3B020eU1RSSL-V1sScSJ5aqlsgqmgzDVQu5TkkTU499lT8LzucSvnWLoiZJ4462MFjnQ4jVJ1iEl1EiMGLyZZti8xAsDJ4957n8AzzUSJby3x2o2-xeKmCcwEBkq0HR58sc098Tnr5zAaBkR7AThrdWQ0NuQK7aNOSdecf4J5hZUGGhWwRCh45krrz76d4-K1qbLo3dos6gbRUEHMXivvdjeZyyf5rMi1aqbQwreR-8HJGNnHbpg8zozzABRpC7nhQRS66raqQfe_O4bkRc7jU",
+	}
+}

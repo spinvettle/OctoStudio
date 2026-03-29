@@ -7,25 +7,19 @@ import (
 	"github.com/spf13/viper"
 )
 
-type ServerConfig struct {
-	Port int    `mapstructure:"port"`
-	Name string `mapstructure:"name"`
-	Mode string `mapstructure:"mode"`
-}
-type LoggingConfig struct {
-	Level   string `mapstructure:"level"`
-	Output  string `mapstructure:"output"`  // "stdout" 或 "file"
-	FileDir string `mapstructure:"filedir"` // 日志文件目录
-}
-
 type Config struct {
-	ServerConfig  ServerConfig  `mapstructure:"server"`
-	LoggingConfig LoggingConfig `mapstructure:"logging"`
+	Port       int    `mapstructure:"port"`
+	Name       string `mapstructure:"name"`
+	Mode       string `mapstructure:"mode"`
+	Level      string `mapstructure:"level"`
+	Output     string `mapstructure:"output"` // "stdout" 或 "file"
+	FileDir    string `mapstructure:"filedir"`
+	RetryCount int    `mapstructure:"retry_count"`
 }
 
 var GlobalConfig Config
 
-func LoadConfig() error {
+func LoadConfig(path string) error {
 
 	if err := godotenv.Load(); err != nil {
 		if !strings.Contains(err.Error(), "no such file or directory") {
@@ -34,7 +28,7 @@ func LoadConfig() error {
 	}
 
 	v := viper.New()
-	v.SetConfigFile("./config.yaml")
+	v.SetConfigFile(path)
 	if err := v.ReadInConfig(); err != nil {
 		return err
 	}
