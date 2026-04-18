@@ -5,9 +5,9 @@ import (
 	"github.com/spinvettle/OctoStudio/internal/proxy"
 )
 
-func Router(relay *proxy.RelayHandler) *gin.Engine {
+func Router() *gin.Engine {
 	r := gin.Default()
-	r.POST("/backend-api/codex/responses", relay.Relay)
+	r.POST("/backend-api/codex/responses", proxy.Relay)
 
 	return r
 }
