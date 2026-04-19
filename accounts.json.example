@@ -1,0 +1,10 @@
+{
+    "type":"Codex",
+    "accounts":[
+        {
+            "name":"1",
+            "access_token": "1",
+            "refresh_token": "2"
+        }
+    ]
+}
