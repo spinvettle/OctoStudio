@@ -6,7 +6,7 @@
 pre-commit:
 	pre-commit run --all-files
 run:
-	go run ./cmd/main.go
+	go run ./cmd/studio/main.go
 # Show available targets
 help:
 	@echo "Available targets:"

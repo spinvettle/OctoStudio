@@ -42,7 +42,7 @@ type UsageResponse struct {
 		} `json:"primary_window"`
 	} `json:"rate_limit"`
 
-	// 代码审查配额（通常与上面分开）
+	// 代码审查配额
 	CodeReviewRateLimit struct {
 		Allowed       bool `json:"allowed"`
 		LimitReached  bool `json:"limit_reached"`

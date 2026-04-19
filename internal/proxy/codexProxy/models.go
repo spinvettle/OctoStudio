@@ -1,4 +1,4 @@
-package proxy
+package codexProxy
 
 type RateLimitWindow struct {
 	UsedPercent        float64 `json:"used_percent"`

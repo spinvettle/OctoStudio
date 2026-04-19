@@ -1,4 +1,4 @@
-package proxy
+package codexProxy
 
 import (
 	"sync"
@@ -41,12 +41,26 @@ func (pool *AccountPool) AddAccount(account *Account) error {
 		pool.accountsMap = make(map[string]*Account)
 	}
 	pool.accountsMap[account.ID] = account
+	if account.UsagePercent > 0 {
+		account.Status = Enabled
+	} else {
+		account.Status = Disabled
+	}
 	pool.accountList = append(pool.accountList, account)
 	pool.mu.Unlock()
 
 	return nil
 }
+func (pool *AccountPool) GetAllAccounts() *[]AccountSnap {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+	list := make([]AccountSnap, 0, len(pool.accountsMap))
+	for _, acc := range pool.accountsMap {
+		list = append(list, acc.SnapShot())
+	}
+	return &list
 
+}
 func (pool *AccountPool) GetAccount() (*Account, error) {
 
 	pool.mu.Lock()

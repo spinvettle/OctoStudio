@@ -1,4 +1,4 @@
-package proxy
+package codexProxy
 
 import (
 	"sync"
@@ -17,11 +17,22 @@ const (
 	AccessTokenMode LoginMode = "access_token"
 )
 
+type AccountItem struct {
+	Name         string `json:"name"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type AccountJsonFile struct {
+	Type     string        `json:"type"`
+	Accounts []AccountItem `json:"accounts"`
+}
+
 type Account struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	AccessToken  string `json:"access_token"`
-	RefreshToken string
+	RefreshToken string `json:"refresh_token"`
 	TokenExp     int64
 	Status       AccountStatus
 	UsagePercent float64

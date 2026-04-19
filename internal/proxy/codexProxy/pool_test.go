@@ -1,4 +1,4 @@
-package proxy
+package codexProxy
 
 import (
 	"testing"
@@ -14,8 +14,8 @@ func TestEmptyError(t *testing.T) {
 }
 
 func setUpPool() *AccountPool {
-	account1 := &Account{ID: "1", Name: "account_1", Status: Enabled}
-	account2 := &Account{ID: "2", Name: "account_2", Status: Enabled}
+	account1 := &Account{ID: "1", Name: "account_1", Status: Enabled, UsagePercent: 10.0}
+	account2 := &Account{ID: "2", Name: "account_2", Status: Enabled, UsagePercent: 10.0}
 	pool := NewAccountPool()
 	_ = pool.AddAccount(account1)
 	_ = pool.AddAccount(account2)

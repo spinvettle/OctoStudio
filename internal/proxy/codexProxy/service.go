@@ -1,4 +1,4 @@
-package proxy
+package codexProxy
 
 import (
 	"bytes"
@@ -6,8 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"log/slog"
 	"maps"
+	"math/rand"
 	"net/http"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,43 +29,139 @@ var (
 const CodexResponsesURL = "https://chatgpt.com/backend-api/codex/responses"
 const CodexUsageURL = "https://chatgpt.com/backend-api//wham/usage"
 const CodexRefreshTokenURL = "https://auth.openai.com/oauth/token"
+const baseBackoff = time.Millisecond * 500
+const maxBackoff = time.Second * 10
 
-var proxyService *ProxyService
+var ProxyService *codexProxyService
 
-type ProxyService struct {
-	pool               *AccountPool
-	openaiClient       *openaiClient
-	relayClient        *http.Client
-	accountColdingTime time.Duration
-}
-
-func NewProxyService(relayClient *http.Client, openaiClient *http.Client, coldingTime time.Duration) *ProxyService {
-	return &ProxyService{
-		pool:               NewAccountPool(),
-		openaiClient:       NewOpenaiClient(openaiClient),
-		relayClient:        relayClient,
-		accountColdingTime: coldingTime,
+func InitCodexProxy() {
+	var err error
+	InitHttpClient()
+	config := &CodexProxyConfig{
+		FetchClient:  FetchClient,
+		RelayClient:  RelayClient,
+		AccountsFile: "./accounts.json",
 	}
+	ProxyService, err = NewcodexProxyService(config)
+	if err != nil {
+		panic(err)
+	}
+	_, _ = ProxyService.AddBatchAccounts(ProxyService.config.AccountsFile)
 }
 
-func buildRequest(headers map[string][]string, body []byte, accessToken string) (*http.Request, error) {
-	proxyReq, err := http.NewRequest("POST", CodexResponsesURL, bytes.NewBuffer(body))
+type codexProxyService struct {
+	pool         *AccountPool
+	openaiClient *openaiClient
+	relayClient  *http.Client
+	config       *CodexProxyConfig
+}
+
+type CodexProxyConfig struct {
+	MaxRetry           int64
+	AccountsFile       string
+	ColdingTime        time.Duration
+	OpenaifetchTimeOut time.Duration
+	CodexRelayTimeOut  time.Duration
+	FetchClient        *http.Client
+	RelayClient        *http.Client
+}
+
+func NewcodexProxyService(config *CodexProxyConfig) (*codexProxyService, error) {
+	if config.ColdingTime == 0 {
+		config.ColdingTime = time.Second * 5
+	}
+	if config.OpenaifetchTimeOut == 0 {
+		config.OpenaifetchTimeOut = time.Second * 60
+	}
+	if config.CodexRelayTimeOut == 0 {
+		config.CodexRelayTimeOut = time.Minute * 10
+	}
+	if config.MaxRetry == 0 {
+		config.MaxRetry = 5
+	}
+	if config.FetchClient == nil || config.RelayClient == nil {
+		return nil, errors.New("nil *http.Client is not allowed")
+	}
+	return &codexProxyService{
+		pool:         NewAccountPool(),
+		openaiClient: NewOpenaiClient(config.FetchClient),
+		relayClient:  config.RelayClient,
+		config:       config,
+	}, nil
+}
+
+func (s *codexProxyService) AddBatchAccounts(path string) (int, error) {
+	bytes, err := os.ReadFile(path)
 	if err != nil {
+		return 0, err
+	}
+	var accountFile AccountJsonFile
+	err = json.Unmarshal(bytes, &accountFile)
+	if err != nil {
+		return 0, nil
+	}
+	if accountFile.Type != "Codex" {
+		return 0, errors.New("Unspported type:" + accountFile.Type)
+	}
+	var wg sync.WaitGroup
+	var count int
+	for i := 0; i < len(accountFile.Accounts); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			accountInfo := accountFile.Accounts[i]
+			err := s.AddAccount(accountInfo.Name, "", accountInfo.AccessToken, accountInfo.RefreshToken)
+			if err != nil {
+				slog.Error("account:%s add error:%s", accountInfo.Name, err.Error())
+				return
+			}
+			count += 1
+
+		}()
+	}
+	wg.Wait()
+	return count, nil
+}
+
+func (s *codexProxyService) saveToDisk() {
+	//TODO 数据库
+	accounts := s.pool.GetAllAccounts()
+	var items []AccountItem
+	for _, item := range *accounts {
+		items = append(items, AccountItem{
+			Name:         item.Name,
+			AccessToken:  item.AccessToken,
+			RefreshToken: item.RefreshToken,
+		})
+	}
+	accountFile := AccountJsonFile{
+		Type:     "Codex",
+		Accounts: items,
+	}
+	bytes, err := json.MarshalIndent(accountFile, "", " ")
+	if err != nil {
+		slog.Error("save account err:" + err.Error())
+	}
+	_ = os.WriteFile(s.config.AccountsFile, bytes, 0644)
+}
+
+func (s *codexProxyService) buildRequest(ctx context.Context, headers map[string][]string, body []byte, accessToken string) (*http.Request, error) {
+	codexProxyReq, err := http.NewRequestWithContext(ctx, "POST", CodexResponsesURL, bytes.NewBuffer(body))
+	if err != nil {
+
 		return nil, err
 	}
-	maps.Copy(proxyReq.Header, headers)
-	proxyReq.Header["Authorization"] = []string{"Bearer " + accessToken}
-	return proxyReq, nil
+	maps.Copy(codexProxyReq.Header, headers)
+	codexProxyReq.Header["Authorization"] = []string{"Bearer " + accessToken}
+	return codexProxyReq, nil
 }
 
-func (s *ProxyService) DoProxyRequest(body []byte, headers map[string][]string) (*http.Response, error) {
+func (s *codexProxyService) DoProxyRequest(ctx context.Context, body []byte, headers map[string][]string) (*http.Response, error) {
 	var resp *http.Response
 	var account *Account
 	var err error
-	// firstTime:=true
 	needAccount := true
-	//暂时写死5次
-	for range 5 {
+	for attempt := 0; attempt < int(s.config.MaxRetry); attempt++ {
 		if needAccount {
 			account, err = s.pool.GetAccount()
 			if err != nil {
@@ -72,12 +172,11 @@ func (s *ProxyService) DoProxyRequest(body []byte, headers map[string][]string) 
 		accessToken := account.GetAccessToken()
 		ID := account.GetID()
 
-		proxyReq, err := buildRequest(headers, body, accessToken)
+		codexProxyReq, err := s.buildRequest(ctx, headers, body, accessToken)
 		if err != nil {
 			return nil, err
 		}
-
-		resp, err = s.relayClient.Do(proxyReq)
+		resp, err = s.relayClient.Do(codexProxyReq)
 		if err != nil {
 			return nil, err
 		}
@@ -93,9 +192,15 @@ func (s *ProxyService) DoProxyRequest(body []byte, headers map[string][]string) 
 		case http.StatusRequestTimeout,
 			http.StatusGatewayTimeout,
 			http.StatusServiceUnavailable:
-			//TDO退避重试
+
 			needAccount = false
-			time.Sleep(time.Millisecond * 100)
+			sleepTime := baseBackoff * (1 << attempt)
+
+			sleepTime += time.Duration(rand.Int63n(int64(baseBackoff) / 5))
+			if sleepTime > maxBackoff {
+				sleepTime = maxBackoff
+			}
+			time.Sleep(sleepTime)
 
 		case http.StatusBadRequest,
 			http.StatusNotFound,
@@ -124,7 +229,7 @@ func (s *ProxyService) DoProxyRequest(body []byte, headers map[string][]string) 
 	return resp, ErrRelayDefaut
 }
 
-func (s *ProxyService) AddAccount(name, apiKey, accessToken, refreshToken string) error {
+func (s *codexProxyService) AddAccount(name, apiKey, accessToken, refreshToken string) error {
 	exp, _, err := utils.ParseAccessToken(accessToken)
 	if err != nil {
 		return err
@@ -143,7 +248,7 @@ func (s *ProxyService) AddAccount(name, apiKey, accessToken, refreshToken string
 	if err != nil {
 		return err
 	}
-	account.UsagePercent = usage
+	account.UsagePercent = 100 - usage
 	err = s.pool.AddAccount(account)
 	if err != nil {
 		return err
@@ -153,15 +258,15 @@ func (s *ProxyService) AddAccount(name, apiKey, accessToken, refreshToken string
 
 }
 
-func (s *ProxyService) UpdateAccount(id, apiKey, accessToken, refreshToken string) error {
+func (s *codexProxyService) UpdateAccount(id, apiKey, accessToken, refreshToken string) error {
 	return nil
 }
 
-func (s *ProxyService) DeleteAccount(id string) error {
+func (s *codexProxyService) DeleteAccount(id string) error {
 	return nil
 }
 
-func (s *ProxyService) Refresh(id string) {
+func (s *codexProxyService) Refresh(id string) {
 	account, err := s.pool.GetAccountById(id)
 	if err != nil {
 		log.Println("Refresh err:" + err.Error())
@@ -169,7 +274,7 @@ func (s *ProxyService) Refresh(id string) {
 	}
 	account.UpdateStatus(Refreshing)
 	accountSnap := account.SnapShot()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), s.config.OpenaifetchTimeOut)
 	defer cancel()
 	accessToken, refreshToken, exp, err := s.openaiClient.fetchToken(ctx, accountSnap.RefreshToken)
 	if err != nil {
@@ -180,9 +285,11 @@ func (s *ProxyService) Refresh(id string) {
 	account.UpdateToken(accessToken, refreshToken, exp)
 	account.UpdateStatus(Enabled)
 
+	go s.saveToDisk()
+
 }
 
-func (s *ProxyService) Colding(id string) {
+func (s *codexProxyService) Colding(id string) {
 	account, err := s.pool.GetAccountById(id)
 	if err != nil {
 		log.Println("Refresh err:" + err.Error())
@@ -190,19 +297,19 @@ func (s *ProxyService) Colding(id string) {
 	}
 	account.UpdateStatus(Colding)
 	// accountSnap := account.SnapShot()
-	time.AfterFunc(s.accountColdingTime, func() {
+	time.AfterFunc(s.config.ColdingTime, func() {
 		account.UpdateStatus(Enabled)
 	})
 
 }
 
-func (s *ProxyService) GetUsage(id string) {
+func (s *codexProxyService) GetUsage(id string) {
 	account, err := s.pool.GetAccountById(id)
 	if err != nil {
 		log.Println("Refresh err:" + err.Error())
 	}
 	accountSnap := account.SnapShot()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), s.config.OpenaifetchTimeOut)
 	defer cancel()
 	usage, err := s.openaiClient.fetchUsage(ctx, accountSnap.AccessToken)
 	if err != nil {
@@ -260,7 +367,6 @@ func (c *openaiClient) fetchUsage(ctx context.Context, accessToken string) (floa
 	var usageResp Usage
 	request, _ := http.NewRequestWithContext(ctx, "GET", CodexUsageURL, nil)
 	request.Header.Set("Host", "chatgpt.com")
-	request.Header.Set("Accept-Encoding", "gzip, deflate, br")
 	request.Header.Set("Connection", "keep-alive")
 	request.Header.Set("Authorization", "Bearer "+accessToken)
 
