@@ -7,6 +7,10 @@ pre-commit:
 	pre-commit run --all-files
 run:
 	go run ./cmd/studio/main.go
+docker-build:
+	docker build -f dockerfile.yaml -t octostudio-app .
+docker-run:
+	docker run -d -p 8080:8080 --name my-studio octostudio-app
 # Show available targets
 help:
 	@echo "Available targets:"

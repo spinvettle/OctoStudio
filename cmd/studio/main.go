@@ -6,21 +6,26 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/spinvettle/OctoStudio/internal/config"
+	"github.com/spinvettle/OctoStudio/internal/logger"
 	"github.com/spinvettle/OctoStudio/internal/proxy/codexProxy"
 	"github.com/spinvettle/OctoStudio/internal/router"
 )
 
 func Init() {
+	if err := config.LoadConfig("./config.yaml"); err != nil {
+		panic(err)
+	}
+	if err := logger.InitLogger(config.Mode, config.LogFile); err != nil {
+		panic(err)
+	}
 	codexProxy.InitCodexProxy()
 
 }
 
 func main() {
-	if err := config.LoadConfig("./config.yaml"); err != nil {
-		panic(err)
-	}
+
 	Init()
-	port := config.GlobalConfig.Port
+	port := config.Port
 	// mode := config.GlobalConfig.ServerConfig.Mode
 
 	server := router.Router()

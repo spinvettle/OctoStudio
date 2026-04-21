@@ -6,15 +6,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 
-RUN go build -o server ./cmd/studio/main.go
-
-FROM debian:bullseye-slim
-
-WORKDIR /app
-
-COPY --from=builder /build/server /app/server
-COPY --from=builder /build/accounts.json /app/accounts.json
+RUN go build -o ./cmd/studio/server ./cmd/studio/main.go
 
 EXPOSE 8080
 
-CMD ["/app/server"]
+CMD ["./cmd/studio/server"]
