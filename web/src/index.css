@@ -1,0 +1,94 @@
+:root {
+  --bg: #0b0e14;
+  --surface-0: #0b0e14;
+  --surface-1: #131925;
+  --border-subtle: rgba(164, 178, 209, 0.16);
+  --border-strong: rgba(164, 178, 209, 0.28);
+  --text-strong: #f3f6ff;
+  --text-muted: #a8b3ca;
+  --text-dim: #7f8ba4;
+  --accent: #4a84ff;
+  --accent-strong: #8cb0ff;
+  --shadow-panel: 0 20px 60px rgba(0, 0, 0, 0.35);
+  --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+
+  font-family: var(--sans);
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text-strong);
+  background: radial-gradient(
+      circle at top,
+      rgba(74, 132, 255, 0.16),
+      transparent 28%
+    ),
+    linear-gradient(180deg, #0b0e14 0%, #0e121b 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: radial-gradient(
+      circle at top,
+      rgba(74, 132, 255, 0.12),
+      transparent 24%
+    ),
+    linear-gradient(180deg, #0b0e14 0%, #0e121b 100%);
+}
+
+a,
+button {
+  color: inherit;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+h1,
+h2,
+h3,
+p,
+dl,
+dt,
+dd {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(2rem, 3.8vw, 3rem);
+  line-height: 1.08;
+}
+
+h2 {
+  font-size: clamp(2rem, 3.2vw, 2.8rem);
+  line-height: 1.08;
+  margin-top: 10px;
+}
+
+h3 {
+  font-size: 1.15rem;
+  line-height: 1.25;
+}
+
+p {
+  font-size: 1rem;
+}
+
+#root {
+  min-height: 100vh;
+}
