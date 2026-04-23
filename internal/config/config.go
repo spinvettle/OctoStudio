@@ -8,23 +8,25 @@ import (
 )
 
 var (
-	Port       int
-	Name       string
-	Mode       string
-	Level      string
-	Output     string
-	LogFile    string
-	RetryCount int
+	Port              int
+	Name              string
+	Mode              string
+	Level             string
+	Output            string
+	LogFile           string
+	RetryCount        int
+	CodexRelayTimeOut int
 )
 
 type Config struct {
-	Port       int    `mapstructure:"port"`
-	Name       string `mapstructure:"name"`
-	Mode       string `mapstructure:"mode"`
-	Level      string `mapstructure:"level"`
-	Output     string `mapstructure:"output"` // "stdout" 或 "file"
-	LogFile    string `mapstructure:"log_file"`
-	RetryCount int    `mapstructure:"retry_count"`
+	Port              int    `mapstructure:"port"`
+	Name              string `mapstructure:"name"`
+	Mode              string `mapstructure:"mode"`
+	Level             string `mapstructure:"level"`
+	Output            string `mapstructure:"output"` // "stdout" 或 "file"
+	LogFile           string `mapstructure:"log_file"`
+	RetryCount        int    `mapstructure:"retry_count"`
+	CodexRelayTimeOut int    `mapstructure:"codex_relay_timeout"`
 }
 
 var GlobalConfig Config
@@ -56,6 +58,7 @@ func LoadConfig(path string) error {
 	Output = GlobalConfig.Output
 	LogFile = GlobalConfig.LogFile
 	RetryCount = GlobalConfig.RetryCount
+	CodexRelayTimeOut = GlobalConfig.CodexRelayTimeOut
 	// fmt.Printf("%+v", GlobalConfig)
 	return nil
 }

@@ -3,10 +3,12 @@ package codexProxy
 import (
 	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/spinvettle/OctoStudio/internal/config"
 	"github.com/spinvettle/OctoStudio/internal/utils"
 )
 
@@ -14,14 +16,17 @@ func CodexRelay(c *gin.Context) {
 
 	originBodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		utils.FAIL(c, http.StatusBadRequest, "json format error", nil)
+		slog.ErrorContext(c.Request.Context(), "failed to read request body", slog.Any("error", err))
+		utils.FAIL(c, http.StatusBadRequest, "failed to read request body"+err.Error(), nil)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
+	ctx1 := context.WithoutCancel(c.Request.Context()) //只传Value
+	ctx, cancel := context.WithTimeout(ctx1, time.Duration(config.CodexRelayTimeOut)*time.Second)
 	defer cancel()
 	resp, err := ProxyService.DoProxyRequest(ctx, originBodyBytes, c.Request.Header)
 	if err != nil {
-		utils.FAIL(c, http.StatusServiceUnavailable, "server codexProxy error:"+err.Error(), nil)
+		slog.ErrorContext(c.Request.Context(), "upstream failed relay", slog.Any("error", err))
+		utils.FAIL(c, http.StatusServiceUnavailable, "upstream failed relay"+err.Error(), nil)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -32,11 +37,11 @@ func CodexRelay(c *gin.Context) {
 	}
 
 	c.Writer.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(c.Writer, resp.Body)
-	// if err != nil {
-	// 	slog.Error("response client err:%s" + err.Error())
-	// 	return
-	// }
+	_, err = io.Copy(c.Writer, resp.Body)
+	if err != nil {
+		slog.ErrorContext(c.Request.Context(), "failed to response client", slog.Any("error", err))
+		return
+	}
 	// if resp.StatusCode == http.StatusOK {
 	// 	doSSEResponse(c, resp)
 	// } else {

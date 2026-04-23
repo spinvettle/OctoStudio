@@ -7,3 +7,4 @@ level: "debug"  # stdout, file, both
 output: "file"
 log_file: "./logs/app.log"
 retry_count: 1
+codex_relay_timeout: 600 #s

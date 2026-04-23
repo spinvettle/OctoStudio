@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/gin-gonic/gin"
 	"github.com/spinvettle/OctoStudio/internal/config"
 	"github.com/spinvettle/OctoStudio/internal/logger"
 	"github.com/spinvettle/OctoStudio/internal/proxy/codexProxy"
@@ -30,7 +29,7 @@ func main() {
 
 	server := router.Router()
 
-	slog.Info("Run server", "port", port, "mdoe", gin.Mode)
+	slog.Info("Run server", "port", port, "mode", config.Mode)
 	err := server.Run(fmt.Sprintf(":%d", port))
 	if err != nil {
 		slog.Error("Server Run Error", "error", err)

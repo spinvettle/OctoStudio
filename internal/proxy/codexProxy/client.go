@@ -9,7 +9,8 @@ var RelayClient *http.Client
 var FetchClient *http.Client
 
 func InitHttpClient() {
-	RelayClient = &http.Client{Timeout: time.Minute * 1,
+	RelayClient = &http.Client{
+		// Timeout: time.Minute * 1,
 		Transport: &http.Transport{
 			MaxIdleConns:        50,
 			MaxIdleConnsPerHost: 50,

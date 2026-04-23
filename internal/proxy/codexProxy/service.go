@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"log/slog"
 	"maps"
 	"math/rand"
@@ -107,23 +106,25 @@ func (s *codexProxyService) AddBatchAccounts(path string) (int, error) {
 	var count int
 	for i := 0; i < len(accountFile.Accounts); i++ {
 		wg.Add(1)
-		go func() {
+		go func(i int) {
 			defer wg.Done()
 			accountInfo := accountFile.Accounts[i]
 			err := s.AddAccount(accountInfo.Name, "", accountInfo.AccessToken, accountInfo.RefreshToken)
 			if err != nil {
-				slog.Error("account:%s add error:%s", accountInfo.Name, err.Error())
+				slog.Error("failed to add account",
+					slog.String("name", accountInfo.Name),
+					slog.Any("error", err))
 				return
 			}
 			count += 1
 
-		}()
+		}(i)
 	}
 	wg.Wait()
 	return count, nil
 }
 
-func (s *codexProxyService) saveToDisk() {
+func (s *codexProxyService) saveToDisk(ctx context.Context) {
 	//TODO 数据库
 	accounts := s.pool.GetAllAccounts()
 	var items []AccountItem
@@ -140,9 +141,12 @@ func (s *codexProxyService) saveToDisk() {
 	}
 	bytes, err := json.MarshalIndent(accountFile, "", " ")
 	if err != nil {
-		slog.Error("save account err:" + err.Error())
+		slog.ErrorContext(ctx, "marshall json failed", slog.Any("error", err))
 	}
-	_ = os.WriteFile(s.config.AccountsFile, bytes, 0644)
+	err = os.WriteFile(s.config.AccountsFile, bytes, 0644)
+	if err != nil {
+		slog.ErrorContext(ctx, "save account failed", slog.Any("error", err))
+	}
 }
 
 func (s *codexProxyService) buildRequest(ctx context.Context, headers map[string][]string, body []byte, accessToken string) (*http.Request, error) {
@@ -168,9 +172,11 @@ func (s *codexProxyService) DoProxyRequest(ctx context.Context, body []byte, hea
 				return nil, err
 			}
 		}
+		AccountSnap := account.SnapShot()
 
-		accessToken := account.GetAccessToken()
-		ID := account.GetID()
+		accessToken := AccountSnap.AccessToken
+		ID := AccountSnap.ID
+		slog.InfoContext(ctx, "choice account", slog.String("id", AccountSnap.ID), slog.String("name", AccountSnap.Name))
 
 		codexProxyReq, err := s.buildRequest(ctx, headers, body, accessToken)
 		if err != nil {
@@ -178,6 +184,7 @@ func (s *codexProxyService) DoProxyRequest(ctx context.Context, body []byte, hea
 		}
 		resp, err = s.relayClient.Do(codexProxyReq)
 		if err != nil {
+			slog.ErrorContext(ctx, "relay client do failed", slog.Any("error", err))
 			return nil, err
 		}
 		switch resp.StatusCode {
@@ -187,12 +194,18 @@ func (s *codexProxyService) DoProxyRequest(ctx context.Context, body []byte, hea
 			//刷新账号
 			account.UpdateStatus(Refreshing) //先手动设置一遍，防止异步更新状态不及时
 			needAccount = true
-			go s.Refresh(ID)
+			slog.InfoContext(ctx, "need to fresh account", slog.String("id", AccountSnap.ID), slog.String("name", AccountSnap.Name))
+			ctx, cancel := context.WithTimeout(ctx, s.config.OpenaifetchTimeOut)
+			go func() {
+				defer cancel()
+				s.Refresh(ctx, ID)
+			}()
 
 		case http.StatusRequestTimeout,
 			http.StatusGatewayTimeout,
 			http.StatusServiceUnavailable:
 
+			slog.InfoContext(ctx, "relay need to wait", slog.String("reason", resp.Status), slog.Int("retry attempt", attempt))
 			needAccount = false
 			sleepTime := baseBackoff * (1 << attempt)
 
@@ -205,11 +218,12 @@ func (s *codexProxyService) DoProxyRequest(ctx context.Context, body []byte, hea
 		case http.StatusBadRequest,
 			http.StatusNotFound,
 			http.StatusUnprocessableEntity:
-
+			slog.InfoContext(ctx, "upstream returned client error", slog.String("reason", resp.Status))
 			return resp, nil
 
 		case http.StatusTooManyRequests:
 			//冷却账号
+			slog.InfoContext(ctx, "need to cold account", slog.String("id", AccountSnap.ID), slog.String("name", AccountSnap.Name))
 			account.UpdateStatus(Colding)
 			needAccount = true
 			go s.Colding(ID)
@@ -221,7 +235,7 @@ func (s *codexProxyService) DoProxyRequest(ctx context.Context, body []byte, hea
 
 		if resp != nil {
 			if err := resp.Body.Close(); err != nil {
-				log.Printf("close body error: %v", err)
+				slog.ErrorContext(ctx, "failed to close upstream response body", slog.Any("error", err))
 			}
 		}
 
@@ -266,33 +280,34 @@ func (s *codexProxyService) DeleteAccount(id string) error {
 	return nil
 }
 
-func (s *codexProxyService) Refresh(id string) {
+func (s *codexProxyService) Refresh(ctx context.Context, id string) {
 	account, err := s.pool.GetAccountById(id)
 	if err != nil {
-		log.Println("Refresh err:" + err.Error())
+		slog.ErrorContext(ctx, "failed to get account by id", slog.String("id", id), slog.Any("error", err))
 		return
 	}
-	account.UpdateStatus(Refreshing)
 	accountSnap := account.SnapShot()
-	ctx, cancel := context.WithTimeout(context.Background(), s.config.OpenaifetchTimeOut)
-	defer cancel()
+	account.UpdateStatus(Refreshing)
 	accessToken, refreshToken, exp, err := s.openaiClient.fetchToken(ctx, accountSnap.RefreshToken)
 	if err != nil {
-		log.Println("Refresh err:" + err.Error())
+		slog.ErrorContext(ctx, "failed to fetch new access token",
+			slog.String("id", id),
+			slog.String("name", accountSnap.Name),
+			slog.Any("error", err))
 		account.UpdateStatus(Disabled)
 		return
 	}
 	account.UpdateToken(accessToken, refreshToken, exp)
 	account.UpdateStatus(Enabled)
 
-	go s.saveToDisk()
+	s.saveToDisk(ctx)
 
 }
 
 func (s *codexProxyService) Colding(id string) {
 	account, err := s.pool.GetAccountById(id)
 	if err != nil {
-		log.Println("Refresh err:" + err.Error())
+		slog.Error("failed to get account for colding", slog.String("id", id), slog.Any("error", err))
 		return
 	}
 	account.UpdateStatus(Colding)
@@ -306,14 +321,18 @@ func (s *codexProxyService) Colding(id string) {
 func (s *codexProxyService) GetUsage(id string) {
 	account, err := s.pool.GetAccountById(id)
 	if err != nil {
-		log.Println("Refresh err:" + err.Error())
+		slog.Error("failed to get account for usage", slog.String("id", id), slog.Any("error", err))
+		return
 	}
 	accountSnap := account.SnapShot()
 	ctx, cancel := context.WithTimeout(context.Background(), s.config.OpenaifetchTimeOut)
 	defer cancel()
 	usage, err := s.openaiClient.fetchUsage(ctx, accountSnap.AccessToken)
 	if err != nil {
-		log.Println("Refresh err:" + err.Error())
+		slog.ErrorContext(ctx, "failed to fetch usage",
+			slog.String("id", id),
+			slog.String("name", accountSnap.Name),
+			slog.Any("error", err))
 		return
 	}
 	account.UpdateUsage(usage)
@@ -383,7 +402,7 @@ func (c *openaiClient) fetchUsage(ctx context.Context, accessToken string) (floa
 	}
 	err = json.NewDecoder(resp.Body).Decode(&usageResp)
 	if err != nil {
-		log.Printf("请求解析错误: %v", err)
+		slog.ErrorContext(ctx, "failed to decode usage response", slog.Any("error", err))
 		return 0, err
 	}
 	return usageResp.RateLimit.PrimaryWindow.UsedPercent, nil

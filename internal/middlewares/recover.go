@@ -14,11 +14,11 @@ func CustomRecovery() gin.HandlerFunc {
 
 		stackTrace := string(debug.Stack()) //获取堆栈
 
-		slog.Error("System Panic Recovery",
-			"error", recovered,
-			"stack", stackTrace,
-			"path", c.Request.URL.Path,
+		slog.ErrorContext(c.Request.Context(), "system panic recovery",
+			slog.Any("error", recovered),
+			slog.String("stack", stackTrace),
+			slog.String("path", c.Request.URL.Path),
 		)
-		utils.FAIL(c, http.StatusInternalServerError, "error:内部错误", nil)
+		utils.FAIL(c, http.StatusInternalServerError, "error:", "server internal error")
 	})
 }

@@ -12,7 +12,8 @@ func Router() *gin.Engine {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.New()
-	// r.Use(gin.Logger())
+	r.Use(middlewares.TraceID())
+	r.Use(middlewares.AccessLog())
 	r.Use(middlewares.CustomRecovery())
 
 	r.POST("/backend-api/codex/responses", codexProxy.CodexRelay)
