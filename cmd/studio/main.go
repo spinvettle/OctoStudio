@@ -6,8 +6,9 @@ import (
 
 	"github.com/spinvettle/OctoStudio/internal/config"
 	"github.com/spinvettle/OctoStudio/internal/logger"
-	"github.com/spinvettle/OctoStudio/internal/proxy/codexProxy"
+	"github.com/spinvettle/OctoStudio/internal/repo"
 	"github.com/spinvettle/OctoStudio/internal/router"
+	"github.com/spinvettle/OctoStudio/internal/service/relay/codex"
 )
 
 func Init() {
@@ -17,7 +18,11 @@ func Init() {
 	if err := logger.InitLogger(config.Mode, config.LogFile); err != nil {
 		panic(err)
 	}
-	codexProxy.InitCodexProxy()
+	if err := repo.InitDB(config.DSN); err != nil {
+		panic(err)
+	}
+
+	codex.InitCodex()
 
 }
 
@@ -26,7 +31,7 @@ func main() {
 	Init()
 	port := config.Port
 	// mode := config.GlobalConfig.ServerConfig.Mode
-
+	// gin.SetMode(conf)
 	server := router.Router()
 
 	slog.Info("Run server", "port", port, "mode", config.Mode)

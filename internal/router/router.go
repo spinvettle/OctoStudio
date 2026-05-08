@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spinvettle/OctoStudio/internal/config"
 	"github.com/spinvettle/OctoStudio/internal/middlewares"
-	"github.com/spinvettle/OctoStudio/internal/proxy/codexProxy"
+	"github.com/spinvettle/OctoStudio/internal/service/relay/codex"
 )
 
 func Router() *gin.Engine {
@@ -16,7 +16,7 @@ func Router() *gin.Engine {
 	r.Use(middlewares.AccessLog())
 	r.Use(middlewares.CustomRecovery())
 
-	r.POST("/backend-api/codex/responses", codexProxy.CodexRelay)
+	r.POST("/backend-api/codex/responses", codex.CodexRelay)
 	// v1Group := r.Group("/v1")
 	// {
 	// 	v1Group.POST("/chat/completions", func(ctx *gin.Context) {

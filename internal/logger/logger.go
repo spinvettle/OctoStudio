@@ -2,10 +2,13 @@ package logger
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/spinvettle/OctoStudio/internal/consts"
+	"gorm.io/gorm/logger"
 )
 
 type TraceHandler struct {
@@ -47,4 +50,69 @@ func InitLogger(mode string, path string) error {
 
 	return nil
 
+}
+
+type MyGormLogger struct {
+	LogLevel logger.LogLevel
+}
+
+func (l *MyGormLogger) LogMode(level logger.LogLevel) logger.Interface {
+	return &MyGormLogger{LogLevel: level} // 返回新实例
+}
+
+func (l *MyGormLogger) Info(ctx context.Context, msg string, args ...interface{}) {
+	if l.LogLevel >= logger.Info {
+		slog.InfoContext(ctx, "GORM Info", "message", fmt.Sprintf(msg, args...))
+	}
+}
+
+func (l *MyGormLogger) Warn(ctx context.Context, msg string, args ...interface{}) {
+	if l.LogLevel >= logger.Warn {
+		slog.WarnContext(ctx, "GORM Warn", "message", fmt.Sprintf(msg, args...))
+	}
+}
+
+func (l *MyGormLogger) Error(ctx context.Context, msg string, args ...interface{}) {
+	if l.LogLevel >= logger.Error {
+		slog.ErrorContext(ctx, "GORM Error", "message", fmt.Sprintf(msg, args...))
+	}
+}
+
+func (l *MyGormLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+	if l.LogLevel <= logger.Silent {
+		return
+	}
+
+	elapsed := time.Since(begin)
+	sql, rows := fc()
+
+	// 处理错误打 Error 日志
+	if err != nil && l.LogLevel >= logger.Error {
+		slog.ErrorContext(ctx, "GORM SQL Error",
+			"sql", sql,
+			"RowsAffected", rows,
+			"elapsed", elapsed,
+			"error", err,
+		)
+		return
+	}
+
+	// 处理慢查询：假设超过 200ms
+	if elapsed > 200*time.Millisecond && l.LogLevel >= logger.Warn {
+		slog.WarnContext(ctx, "GORM SLOW SQL",
+			"sql", sql,
+			"RowsAffected", rows,
+			"elapsed", elapsed,
+		)
+		return
+	}
+
+	// 处理正常记录：打 Info 日志
+	if l.LogLevel >= logger.Info {
+		slog.InfoContext(ctx, "GORM SQL Trace",
+			"sql", sql,
+			"RowsAffected", rows,
+			"elapsed", elapsed,
+		)
+	}
 }

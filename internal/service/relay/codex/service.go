@@ -1,4 +1,4 @@
-package codexProxy
+package codex
 
 import (
 	"bytes"
@@ -31,31 +31,31 @@ const CodexRefreshTokenURL = "https://auth.openai.com/oauth/token"
 const baseBackoff = time.Millisecond * 500
 const maxBackoff = time.Second * 10
 
-var ProxyService *codexProxyService
+var ProxyService *codexService
 
-func InitCodexProxy() {
+func InitCodex() {
 	var err error
 	InitHttpClient()
-	config := &CodexProxyConfig{
+	config := &codexConfig{
 		FetchClient:  FetchClient,
 		RelayClient:  RelayClient,
 		AccountsFile: "./accounts.json",
 	}
-	ProxyService, err = NewcodexProxyService(config)
+	ProxyService, err = NewcodexService(config)
 	if err != nil {
 		panic(err)
 	}
 	_, _ = ProxyService.AddBatchAccounts(ProxyService.config.AccountsFile)
 }
 
-type codexProxyService struct {
+type codexService struct {
 	pool         *AccountPool
 	openaiClient *openaiClient
 	relayClient  *http.Client
-	config       *CodexProxyConfig
+	config       *codexConfig
 }
 
-type CodexProxyConfig struct {
+type codexConfig struct {
 	MaxRetry           int64
 	AccountsFile       string
 	ColdingTime        time.Duration
@@ -65,7 +65,7 @@ type CodexProxyConfig struct {
 	RelayClient        *http.Client
 }
 
-func NewcodexProxyService(config *CodexProxyConfig) (*codexProxyService, error) {
+func NewcodexService(config *codexConfig) (*codexService, error) {
 	if config.ColdingTime == 0 {
 		config.ColdingTime = time.Second * 5
 	}
@@ -81,7 +81,7 @@ func NewcodexProxyService(config *CodexProxyConfig) (*codexProxyService, error) 
 	if config.FetchClient == nil || config.RelayClient == nil {
 		return nil, errors.New("nil *http.Client is not allowed")
 	}
-	return &codexProxyService{
+	return &codexService{
 		pool:         NewAccountPool(),
 		openaiClient: NewOpenaiClient(config.FetchClient),
 		relayClient:  config.RelayClient,
@@ -89,7 +89,7 @@ func NewcodexProxyService(config *CodexProxyConfig) (*codexProxyService, error) 
 	}, nil
 }
 
-func (s *codexProxyService) AddBatchAccounts(path string) (int, error) {
+func (s *codexService) AddBatchAccounts(path string) (int, error) {
 	bytes, err := os.ReadFile(path)
 	if err != nil {
 		return 0, err
@@ -124,7 +124,7 @@ func (s *codexProxyService) AddBatchAccounts(path string) (int, error) {
 	return count, nil
 }
 
-func (s *codexProxyService) saveToDisk(ctx context.Context) {
+func (s *codexService) saveToDisk(ctx context.Context) {
 	//TODO 数据库
 	accounts := s.pool.GetAllAccounts()
 	var items []AccountItem
@@ -149,18 +149,18 @@ func (s *codexProxyService) saveToDisk(ctx context.Context) {
 	}
 }
 
-func (s *codexProxyService) buildRequest(ctx context.Context, headers map[string][]string, body []byte, accessToken string) (*http.Request, error) {
-	codexProxyReq, err := http.NewRequestWithContext(ctx, "POST", CodexResponsesURL, bytes.NewBuffer(body))
+func (s *codexService) buildRequest(ctx context.Context, headers map[string][]string, body []byte, accessToken string) (*http.Request, error) {
+	codexReq, err := http.NewRequestWithContext(ctx, "POST", CodexResponsesURL, bytes.NewBuffer(body))
 	if err != nil {
 
 		return nil, err
 	}
-	maps.Copy(codexProxyReq.Header, headers)
-	codexProxyReq.Header["Authorization"] = []string{"Bearer " + accessToken}
-	return codexProxyReq, nil
+	maps.Copy(codexReq.Header, headers)
+	codexReq.Header["Authorization"] = []string{"Bearer " + accessToken}
+	return codexReq, nil
 }
 
-func (s *codexProxyService) DoProxyRequest(ctx context.Context, body []byte, headers map[string][]string) (*http.Response, error) {
+func (s *codexService) DoProxyRequest(ctx context.Context, body []byte, headers map[string][]string) (*http.Response, error) {
 	var resp *http.Response
 	var account *Account
 	var err error
@@ -178,11 +178,11 @@ func (s *codexProxyService) DoProxyRequest(ctx context.Context, body []byte, hea
 		ID := AccountSnap.ID
 		slog.InfoContext(ctx, "choice account", slog.String("id", AccountSnap.ID), slog.String("name", AccountSnap.Name))
 
-		codexProxyReq, err := s.buildRequest(ctx, headers, body, accessToken)
+		codexReq, err := s.buildRequest(ctx, headers, body, accessToken)
 		if err != nil {
 			return nil, err
 		}
-		resp, err = s.relayClient.Do(codexProxyReq)
+		resp, err = s.relayClient.Do(codexReq)
 		if err != nil {
 			slog.ErrorContext(ctx, "relay client do failed", slog.Any("error", err))
 			return nil, err
@@ -243,7 +243,7 @@ func (s *codexProxyService) DoProxyRequest(ctx context.Context, body []byte, hea
 	return resp, ErrRelayDefaut
 }
 
-func (s *codexProxyService) AddAccount(name, apiKey, accessToken, refreshToken string) error {
+func (s *codexService) AddAccount(name, apiKey, accessToken, refreshToken string) error {
 	exp, _, err := utils.ParseAccessToken(accessToken)
 	if err != nil {
 		return err
@@ -272,15 +272,15 @@ func (s *codexProxyService) AddAccount(name, apiKey, accessToken, refreshToken s
 
 }
 
-func (s *codexProxyService) UpdateAccount(id, apiKey, accessToken, refreshToken string) error {
+func (s *codexService) UpdateAccount(id, apiKey, accessToken, refreshToken string) error {
 	return nil
 }
 
-func (s *codexProxyService) DeleteAccount(id string) error {
+func (s *codexService) DeleteAccount(id string) error {
 	return nil
 }
 
-func (s *codexProxyService) Refresh(ctx context.Context, id string) {
+func (s *codexService) Refresh(ctx context.Context, id string) {
 	account, err := s.pool.GetAccountById(id)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to get account by id", slog.String("id", id), slog.Any("error", err))
@@ -304,7 +304,7 @@ func (s *codexProxyService) Refresh(ctx context.Context, id string) {
 
 }
 
-func (s *codexProxyService) Colding(id string) {
+func (s *codexService) Colding(id string) {
 	account, err := s.pool.GetAccountById(id)
 	if err != nil {
 		slog.Error("failed to get account for colding", slog.String("id", id), slog.Any("error", err))
@@ -318,7 +318,7 @@ func (s *codexProxyService) Colding(id string) {
 
 }
 
-func (s *codexProxyService) GetUsage(id string) {
+func (s *codexService) GetUsage(id string) {
 	account, err := s.pool.GetAccountById(id)
 	if err != nil {
 		slog.Error("failed to get account for usage", slog.String("id", id), slog.Any("error", err))
