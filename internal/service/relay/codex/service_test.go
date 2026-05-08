@@ -1,4 +1,4 @@
-package codexProxy
+package codex
 
 import (
 	"bytes"
@@ -119,19 +119,19 @@ func TestFetchTokenStatusUnauthorized(t *testing.T) {
 
 }
 
-func TestNewcodexProxyService(t *testing.T) {
-	config := &CodexProxyConfig{
+func TestNewcodexService(t *testing.T) {
+	config := &codexConfig{
 		RelayClient: setUpMockHttpClient(0, mockStatusOK),
 		FetchClient: setUpMockHttpClient(0, mockStatusOK),
 	}
-	codexProxyService, _ := NewcodexProxyService(config)
-	assert.NotNil(t, codexProxyService, "codexProxyService should not be nil")
+	codexService, _ := NewcodexService(config)
+	assert.NotNil(t, codexService, "codexService should not be nil")
 }
 
 func TestServiceAddAccount(t *testing.T) {
 	accessToken, _ := utils.GenAccessToken(time.Now().Add(time.Hour).Unix(), time.Now().Unix())
-	service, err := NewcodexProxyService(
-		&CodexProxyConfig{
+	service, err := NewcodexService(
+		&codexConfig{
 			FetchClient: setUpMockHttpClient(0, usageStatusOK),
 			RelayClient: setUpMockHttpClient(0, mockStatusOK),
 		})
@@ -140,7 +140,7 @@ func TestServiceAddAccount(t *testing.T) {
 	assert.NoError(t, err, "expexted nil error,but get error:%v")
 }
 
-// NewcodexProxyService(setUpMockHttpClient())
+// NewcodexService(setUpMockHttpClient())
 func ServiceAddAccountClient(req *http.Request) *http.Response {
 	if req.Method == "GET" { //mock get usage
 		return usageStatusOK(req)
@@ -201,8 +201,8 @@ func TestServiceAddBatchAccounts(t *testing.T) {
 	err := os.WriteFile(tempFile, mockJSON, 0644)
 
 	require.Nil(t, err)
-	service, err := NewcodexProxyService(
-		&CodexProxyConfig{
+	service, err := NewcodexService(
+		&codexConfig{
 			FetchClient: setUpMockHttpClient(0, usageStatusOK),
 			RelayClient: setUpMockHttpClient(0, mockStatusOK),
 			MaxRetry:    5,
@@ -242,8 +242,8 @@ func TestServiceSavetoDisk(t *testing.T) {
 	tempFile := filepath.Join(tempDir, "test.json")
 	_ = os.WriteFile(tempFile, mockJSON, 0644)
 
-	service, err := NewcodexProxyService(
-		&CodexProxyConfig{
+	service, err := NewcodexService(
+		&codexConfig{
 			AccountsFile: tempFile,
 			FetchClient:  setUpMockHttpClient(0, refreshStatusOK),
 			RelayClient:  setUpMockHttpClient(0, mockStatusUnauthorized),
@@ -267,8 +267,8 @@ func TestServiceSavetoDisk(t *testing.T) {
 }
 
 func TestServiceDoProxyRequestEnabled(t *testing.T) {
-	service, err := NewcodexProxyService(
-		&CodexProxyConfig{
+	service, err := NewcodexService(
+		&codexConfig{
 			FetchClient: setUpMockHttpClient(0, usageStatusOK),
 			RelayClient: setUpMockHttpClient(0, mockStatusOK),
 			MaxRetry:    5,
@@ -310,8 +310,8 @@ func TestServiceDoProxyRequestEnabled(t *testing.T) {
 
 func TestServiceDoProxyRequestColding(t *testing.T) {
 
-	service, err := NewcodexProxyService(
-		&CodexProxyConfig{
+	service, err := NewcodexService(
+		&codexConfig{
 			FetchClient: setUpMockHttpClient(0, usageStatusOK),
 			RelayClient: setUpMockHttpClient(0, mockStatusTooManyRequests),
 			ColdingTime: time.Millisecond * 10,
@@ -336,8 +336,8 @@ func TestServiceDoProxyRequestColding(t *testing.T) {
 
 func TestServiceDoProxyRequestRefresh(t *testing.T) {
 
-	service, err := NewcodexProxyService(
-		&CodexProxyConfig{
+	service, err := NewcodexService(
+		&codexConfig{
 			FetchClient: setUpMockHttpClient(time.Millisecond*10, refreshStatusOK),
 			RelayClient: setUpMockHttpClient(0, mockStatusUnauthorized),
 			ColdingTime: 0,

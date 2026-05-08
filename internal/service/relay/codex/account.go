@@ -1,4 +1,4 @@
-package codexProxy
+package codex
 
 import (
 	"sync"

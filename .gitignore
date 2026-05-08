@@ -1,6 +1,7 @@
 
 .codex
 accounts.json
+/logs
 __*
 # --- 核心二进制文件与模型 ---
 /bin/

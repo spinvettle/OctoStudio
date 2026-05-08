@@ -4,28 +4,37 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/gin-gonic/gin"
 	"github.com/spinvettle/OctoStudio/internal/config"
-	"github.com/spinvettle/OctoStudio/internal/proxy/codexProxy"
+	"github.com/spinvettle/OctoStudio/internal/logger"
+	"github.com/spinvettle/OctoStudio/internal/repo"
 	"github.com/spinvettle/OctoStudio/internal/router"
+	"github.com/spinvettle/OctoStudio/internal/service/relay/codex"
 )
 
 func Init() {
-	codexProxy.InitCodexProxy()
+	if err := config.LoadConfig("./config.yaml"); err != nil {
+		panic(err)
+	}
+	if err := logger.InitLogger(config.Mode, config.LogFile); err != nil {
+		panic(err)
+	}
+	if err := repo.InitDB(config.DSN); err != nil {
+		panic(err)
+	}
+
+	codex.InitCodex()
 
 }
 
 func main() {
-	if err := config.LoadConfig("./config.yaml"); err != nil {
-		panic(err)
-	}
-	Init()
-	port := config.GlobalConfig.Port
-	// mode := config.GlobalConfig.ServerConfig.Mode
 
+	Init()
+	port := config.Port
+	// mode := config.GlobalConfig.ServerConfig.Mode
+	// gin.SetMode(conf)
 	server := router.Router()
 
-	slog.Info("Run server", "port", port, "mdoe", gin.Mode)
+	slog.Info("Run server", "port", port, "mode", config.Mode)
 	err := server.Run(fmt.Sprintf(":%d", port))
 	if err != nil {
 		slog.Error("Server Run Error", "error", err)

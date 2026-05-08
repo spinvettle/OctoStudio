@@ -3,7 +3,9 @@
 name: "Go-gateway"
 mode: "debug"
 port: 8080
-level: "debug"  # stdout, file, both
+level: "debug"
 output: "file"
-filedir: "./logs"
+log_file: "./logs/app.log"
 retry_count: 1
+codex_relay_timeout: 600 #s
+dsn: "host=localhost user=baishan password=baishan dbname=learn port=5432 sslmode=disable TimeZone=Asia/Shanghai"
