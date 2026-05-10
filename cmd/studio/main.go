@@ -5,10 +5,9 @@ import (
 	"log/slog"
 
 	"github.com/spinvettle/OctoStudio/internal/config"
+	"github.com/spinvettle/OctoStudio/internal/db"
 	"github.com/spinvettle/OctoStudio/internal/logger"
-	"github.com/spinvettle/OctoStudio/internal/repo"
 	"github.com/spinvettle/OctoStudio/internal/router"
-	"github.com/spinvettle/OctoStudio/internal/service/relay/codex"
 )
 
 func Init() {
@@ -18,11 +17,9 @@ func Init() {
 	if err := logger.InitLogger(config.Mode, config.LogFile); err != nil {
 		panic(err)
 	}
-	if err := repo.InitDB(config.DSN); err != nil {
+	if _, err := db.InitDB(config.DSN); err != nil {
 		panic(err)
 	}
-
-	codex.InitCodex()
 
 }
 

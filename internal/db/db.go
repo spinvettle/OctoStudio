@@ -1,4 +1,4 @@
-package repo
+package db
 
 import (
 	"errors"
@@ -11,11 +11,10 @@ import (
 	gormLogger "gorm.io/gorm/logger"
 )
 
-var DB *gorm.DB
-
-func InitDB(dsn string) error {
+func InitDB(dsn string) (*gorm.DB, error) {
+	var DB *gorm.DB
 	if dsn == "" {
-		return errors.New("db dsn is incorrect")
+		return nil, errors.New("db dsn is incorrect")
 	}
 	var err error
 	var level gormLogger.LogLevel
@@ -35,7 +34,7 @@ func InitDB(dsn string) error {
 		Logger: &logger.MyGormLogger{LogLevel: level},
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return DB, nil
 }
