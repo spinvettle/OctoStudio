@@ -1,22 +1,34 @@
 package channel
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
 	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type ChannelService struct {
-	// client   *http.Client
-	repo     *ChannelRepo
-	channels *[]Channel
-	mu       sync.RWMutex
-	once     sync.Once
+	fetchClient *http.Client
+	ctxTimeout  time.Duration
+	repo        *ChannelRepo
+	channels    *[]Channel
+	mu          sync.RWMutex
+	once        sync.Once
 }
 
-func NewChannelService(repo *ChannelRepo) *ChannelService {
-	svc := &ChannelService{repo: repo}
+func NewChannelService(DB *gorm.DB, client *http.Client) *ChannelService {
+	repo := NewChannelRepo(DB)
+	svc := &ChannelService{
+		repo:        repo,
+		fetchClient: client,
+	}
 	svc.autoRefreshChannelsCache()
 	return svc
 }
@@ -64,11 +76,43 @@ func (s *ChannelService) RandomPickChannelByModel(modelName string) *[]Channel {
 
 }
 
-func (s *ChannelService) RefreshChannelKey(channelKey ChannelKey) error {
+func (s *ChannelService) RefreshChannelKey(channelKey *ChannelKey) error {
+	payload := channelKey.Metadata.RefreshRequestPayload
+	jsonData, _ := json.Marshal(payload)
+	ctx, cancel := context.WithTimeout(context.Background(), s.ctxTimeout)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, "POST", channelKey.Metadata.RefreshBaseURL, bytes.NewReader(jsonData))
+	if err != nil {
+		return err
+	}
+	resp, err := s.fetchClient.Do(request)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusUnauthorized {
+			return errors.New("unauthorized err")
+		}
+		return errors.New("fetch usage err")
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var refresh RefreshResp
+	err = json.NewDecoder(resp.Body).Decode(&refresh)
+	if err != nil {
+		return err
+	}
+
+	exp := time.Now().Add(time.Second * time.Duration(refresh.ExpiresIn)).Unix()
+	channelKey.Metadata.RefreshRequestPayload.RefreshToken = refresh.RefreshToken
+	channelKey.ApiKey = refresh.AccessToken
+	channelKey.Metadata.Exp = exp
+	err = s.repo.UpdateChannelKey(channelKey)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (s *ChannelService) ColdingChannelKey(channelKey ChannelKey) error {
-	channelKey.Status = Colding
-	return s.repo.UpdateChannelKey(&channelKey)
+	return s.repo.UpdateChannelKeyStatus(channelKey.ID, int(Colding))
 
 }

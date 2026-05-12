@@ -45,6 +45,7 @@ type ChannelKeyMetaData struct {
 		GrantType    string
 		RefreshToken string
 	}
+	Exp            int64
 	RefreshBaseURL string
 }
 
@@ -111,6 +112,10 @@ func (c *ChannelRepo) DeleteChannel(channelID int) error {
 func (c *ChannelRepo) UpdateChannelKey(channelKey *ChannelKey) error {
 	return c.DB.Save(channelKey).Error
 
+}
+func (c *ChannelRepo) UpdateChannelKeyStatus(id int, status int) error {
+	return c.DB.Model(&ChannelKey{}).Where("id = ?", id).
+		Update("status", status).Error
 }
 
 func (c *ChannelRepo) UpdateChannel(ch *Channel) error {
