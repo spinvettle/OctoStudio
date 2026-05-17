@@ -39,7 +39,7 @@ func main() {
 		panic(err)
 	}
 	client := httpclient.NewRelayClient(time.Minute * 10)
-	channelSvc := channel.NewChannelService(DB, client)
+	channelSvc := channel.NewChannelService(DB, client, nil)
 	handler := relay.NewRelayHandler(channelSvc)
 	server := router.Router(handler)
 

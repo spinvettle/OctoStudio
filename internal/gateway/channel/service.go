@@ -5,27 +5,42 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
+)
+
+var (
+	ErrChannelKeyRefreshInProgress = errors.New("channel key refresh already in progress")
+	ErrRefreshTokenUnauthorized    = errors.New("refresh token unauthorized")
+	ErrRefreshTokenFetchFailed     = errors.New("refresh token fetch failed")
 )
 
 type ChannelService struct {
 	fetchClient *http.Client
-	ctxTimeout  time.Duration
+	Cfg         ChannelServiceConfig
 	repo        *ChannelRepo
 	channels    *[]Channel
 	mu          sync.RWMutex
 	once        sync.Once
+	group       singleflight.Group
 }
 
-func NewChannelService(DB *gorm.DB, client *http.Client) *ChannelService {
+type ChannelServiceConfig struct {
+	FetchTimeout time.Duration
+}
+
+func NewChannelService(DB *gorm.DB, client *http.Client, cfg *ChannelServiceConfig) *ChannelService {
 	repo := NewChannelRepo(DB)
 	svc := &ChannelService{
+		Cfg:         *cfg,
 		repo:        repo,
 		fetchClient: client,
 	}
@@ -75,27 +90,58 @@ func (s *ChannelService) RandomPickChannelByModel(modelName string) *[]Channel {
 	return &selectedChannesl
 
 }
-
-func (s *ChannelService) RefreshChannelKey(channelKey *ChannelKey) error {
-	payload := channelKey.Metadata.RefreshRequestPayload
-	jsonData, _ := json.Marshal(payload)
-	ctx, cancel := context.WithTimeout(context.Background(), s.ctxTimeout)
-	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, "POST", channelKey.Metadata.RefreshBaseURL, bytes.NewReader(jsonData))
+func (s *ChannelService) fetchNewToken(ctx context.Context, path string, body []byte) (*http.Response, error) {
+	request, err := http.NewRequestWithContext(ctx, "POST", path, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := s.fetchClient.Do(request)
 	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (s *ChannelService) RefreshKeyOnce(channelKey *ChannelKey) (bool, error) {
+	key := strconv.Itoa(channelKey.ID)
+	_, err, shared := s.group.Do(key, func() (any, error) { // singleflight do refreshing
+		err := s.refreshChannelKey(channelKey)
+		return nil, err
+	})
+
+	return shared, err
+
+}
+func (s *ChannelService) refreshChannelKey(channelKey *ChannelKey) error {
+	var refreshingSuccess bool
+	success, err := s.repo.UpdateChannelKeyStatusWithCondition(channelKey.ID, int(Enable), int(Refreshing))
+	if err != nil {
 		return err
 	}
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusUnauthorized {
-			return errors.New("unauthorized err")
+	if !success { //刷新状态设置失败，已经有操作在执行
+		return ErrChannelKeyRefreshInProgress
+	}
+	defer func() { //如果success设置Enable->Refreshing,现在失败了需要设置成Disable
+		if !refreshingSuccess {
+			_, _ = s.repo.UpdateChannelKeyStatusWithCondition(channelKey.ID, int(Refreshing), int(Disable))
 		}
-		return errors.New("fetch usage err")
+	}()
+	payload := channelKey.Metadata.RefreshRequestPayload
+	jsonData, _ := json.Marshal(payload)
+	ctx, cancel := context.WithTimeout(context.Background(), s.Cfg.FetchTimeout)
+	defer cancel()
+	resp, err := s.fetchNewToken(ctx, channelKey.Metadata.RefreshBaseURL, jsonData)
+	if err != nil {
+		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusUnauthorized {
+			return ErrRefreshTokenUnauthorized
+		}
+		return fmt.Errorf("%w: status %d", ErrRefreshTokenFetchFailed, resp.StatusCode)
+	}
+
 	var refresh RefreshResp
 	err = json.NewDecoder(resp.Body).Decode(&refresh)
 	if err != nil {
@@ -106,13 +152,20 @@ func (s *ChannelService) RefreshChannelKey(channelKey *ChannelKey) error {
 	channelKey.Metadata.RefreshRequestPayload.RefreshToken = refresh.RefreshToken
 	channelKey.ApiKey = refresh.AccessToken
 	channelKey.Metadata.Exp = exp
+	channelKey.Status = Enable
 	err = s.repo.UpdateChannelKey(channelKey)
 	if err != nil {
 		return err
 	}
+	refreshingSuccess = true
 	return nil
 }
 func (s *ChannelService) ColdingChannelKey(channelKey ChannelKey) error {
-	return s.repo.UpdateChannelKeyStatus(channelKey.ID, int(Colding))
+	err := s.repo.UpdateChannelKeyStatus(channelKey.ID, int(Colding))
+	return err
 
+}
+
+func (s *ChannelService) UpdateChannelKeyStatus(id int, status ChannelKeyStatus) error {
+	return s.repo.UpdateChannelKeyStatus(id, int(status))
 }

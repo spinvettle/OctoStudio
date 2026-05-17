@@ -40,13 +40,14 @@ type ChannelKey struct {
 
 type ChannelKeyMetaData struct {
 	CanRefresh            bool
-	RefreshRequestPayload struct {
-		IdClient     string
-		GrantType    string
-		RefreshToken string
-	}
-	Exp            int64
-	RefreshBaseURL string
+	RefreshRequestPayload RefreshRequestPayload
+	Exp                   int64
+	RefreshBaseURL        string
+}
+type RefreshRequestPayload struct {
+	IdClient     string
+	GrantType    string
+	RefreshToken string
 }
 
 type ChannelRepo struct {
@@ -83,6 +84,15 @@ func (c *ChannelRepo) GetChannelByID(id int) (*Channel, error) {
 	return &ch, nil
 
 }
+func (c *ChannelRepo) GetChannelKeyByID(id int) (*ChannelKey, error) {
+	var ch ChannelKey
+	err := c.DB.First(&ch, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &ch, nil
+
+}
 
 func (c *ChannelRepo) AddChannel(ch *Channel) (int, error) {
 	res := c.DB.Create(ch)
@@ -113,9 +123,19 @@ func (c *ChannelRepo) UpdateChannelKey(channelKey *ChannelKey) error {
 	return c.DB.Save(channelKey).Error
 
 }
-func (c *ChannelRepo) UpdateChannelKeyStatus(id int, status int) error {
-	return c.DB.Model(&ChannelKey{}).Where("id = ?", id).
-		Update("status", status).Error
+
+func (c *ChannelRepo) UpdateChannelKeyStatus(id, newStatus int) error {
+	return c.DB.Model(&ChannelKey{}).Where("id = ?", id).Update("status", newStatus).Error
+
+}
+
+func (c *ChannelRepo) UpdateChannelKeyStatusWithCondition(id, old, newStatus int) (bool, error) {
+	res := c.DB.Model(&ChannelKey{}).Where("id = ? and status =?", id, old).
+		Update("status", newStatus)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected == 1, nil
 }
 
 func (c *ChannelRepo) UpdateChannel(ch *Channel) error {

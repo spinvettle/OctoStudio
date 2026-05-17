@@ -126,7 +126,7 @@ func (h *RelayHandler) doRelayWithRetry(c *gin.Context, requestBody []byte, chs 
 			case http.StatusUnauthorized, http.StatusForbidden:
 				if channelKey.Metadata.CanRefresh {
 					go func() {
-						err := h.channelSvc.RefreshChannelKey(&channelKey)
+						_, err := h.channelSvc.RefreshKeyOnce(&channelKey)
 						if err != nil {
 							slog.ErrorContext(c.Request.Context(), "refreshing channelKey failed",
 								slog.Int("channelKeyID", channelKey.ID),
@@ -138,7 +138,9 @@ func (h *RelayHandler) doRelayWithRetry(c *gin.Context, requestBody []byte, chs 
 				continue
 			case http.StatusTooManyRequests:
 				go func() {
-					err := h.channelSvc.ColdingChannelKey(channelKey)
+					// nolint:all /
+					err := h.channelSvc.UpdateChannelKeyStatus(channelKey.ID, channel.Colding)
+					err = h.channelSvc.ColdingChannelKey(channelKey)
 					if err != nil {
 						slog.ErrorContext(c.Request.Context(), "colding channelKey failed",
 							slog.Int("channelKeyID", channelKey.ID),
